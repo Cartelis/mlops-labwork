@@ -1,0 +1,37 @@
+# 1. Bazinė stadija su OS saugumo pataisymais
+FROM python:3.12-slim-trixie AS base
+
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Builder stadija švariam aplinkos paruošimui
+FROM base AS builder
+WORKDIR /build
+COPY requirements-prepare.txt ./
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir --no-compile -r requirements-prepare.txt
+
+# 3. Runtime stadija galutiniam lengvam vaizdui
+FROM base AS runtime
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+
+# Nukopijuojame paruoštą virtualią aplanką iš builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Nukopijuojame tik mokymui reikalingą kodą ir parametrus
+COPY src/bootstrap.py ./src/bootstrap.py
+COPY params.yaml ./params.yaml
+
+# SAUGUMAS: Sukuriame ne-root naudotoją su konkrečiu UID
+RUN useradd --create-home --uid 1000 mluser \
+    && mkdir -p /app/data /app/models \
+    && chown -R mluser:mluser /app
+USER mluser
+
+# Konteineris startuodamas atlieka bazinį duomenų generavimą ir modelio patikrą
+CMD ["python", "src/bootstrap.py"]
