@@ -30,6 +30,10 @@ def dvc_md5(dvc_file: Path) -> str:
 def main() -> None:
     params = yaml.safe_load((ROOT / "params.yaml").read_text())["train"]
 
+    # Nustato klasterio MLflow serverio adresą
+    # Pirmiausia tikrina aplinkos kintamąjį, o jei jo nėra – naudoja vietinį port-forward adresą
+    mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000"))
+
     # Nustatome eksperimento pavadinimą
     mlflow.set_experiment(os.environ.get("MLFLOW_EXPERIMENT_NAME", "car-price-prediction"))
 

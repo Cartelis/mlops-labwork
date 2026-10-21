@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mlops-labwork-config
+  namespace: mlops-labwork
+data:
+  MLFLOW_TRACKING_URI: "http://mlflow-server.mlops-labwork.svc:5000"

@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow-server
+  namespace: mlops-labwork
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlflow-server
+  template:
+    metadata:
+      labels:
+        app: mlflow-server
+    spec:
+      containers:
+        - name: mlflow
+          image: ghcr.io/mlflow/mlflow:v3.17.2-full
+          command: ["mlflow", "server"]
+          args:
+            - "--backend-store-uri"
+            # - "sqlite:////mlflow-artifacts/mlflow.db"
+            - "postgresql://mlflowuser:mlflowpassword@mlflow-postgres:5432/mlflowdb"
+            - "--default-artifact-root"
+            - "/mlflow-artifacts"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "5000"
+            - "--disable-security-middleware"
+            - "--workers"
+            - "1"
+            # - "--allowed-hosts"
+            # - "*"
+          ports:
+            # - name: http-port
+            - containerPort: 5000
+          volumeMounts:
+            - name: artifact-volume
+              mountPath: /mlflow-artifacts
+          resources:
+            requests:
+              # cpu: "200m"
+              # memory: "512Mi"
+              cpu: "1"
+              memory: "1Gi"
+            limits:
+              # cpu: "1"
+              # memory: "1Gi"
+              cpu: "2"
+              memory: "2Gi"
+      volumes:
+        - name: artifact-volume
+          persistentVolumeClaim:
+            claimName: mlflow-artifact-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow-server
+  namespace: mlops-labwork
+spec:
+  # type: ClusterIP
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
+  selector:
+    app: mlflow-server
