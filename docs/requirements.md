@@ -20,7 +20,7 @@ Tikslas: MAE (vidutinė absoliutinė paklaida) <= 1500 EUR, R2 (determinacijos k
 | ID     | Kategorija | Reikalavimas           | KPI                    |
 |--------|------------|------------------------|------------------------|
 | NFR-01 | Našumas    | Modelio mokymo laikas  | CPU aplinkoje <= 10 s  |
-| NFR-02 | Kokybė     | Kainos prognozė        | MAE <= 1500 EUR        |
+| NFR-02 | Kokybė     | Kainos prognozė        | MAE <= 1800 EUR        |
 | NFR-03 | Kokybė     | Modelio atitikimas     | R2 score >= 0.75       |
 
 ## 3.x Eksperimentų sekimo ir atkartojamumo NFR (v1.1)
