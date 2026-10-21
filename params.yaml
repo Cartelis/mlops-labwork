@@ -1,3 +1,3 @@
 train:
-  alpha: 15.0
+  alpha: 5.0
   random_seed: 42
