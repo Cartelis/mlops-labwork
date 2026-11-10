@@ -1,0 +1,12 @@
+mlflow==3.17.2
+pandas
+scikit-learn
+pyyaml
+joblib
+optuna
+psutil
+fastapi
+uvicorn[standard]
+pytest
+ruff
+httpx
