@@ -64,6 +64,8 @@ def main():
     )
 
     mlflow.enable_system_metrics_logging()
+    mlflow.set_system_metrics_sampling_interval(1)
+    mlflow.set_system_metrics_samples_before_logging(1)
 
     with mlflow.start_run(run_name="ridge-hpo") as parent_run:
         mlflow.set_tag("git_commit", git_commit())
