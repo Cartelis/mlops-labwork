@@ -18,7 +18,10 @@ TRACKING_URI = os.getenv(
     "MLFLOW_TRACKING_URI",
     "http://localhost:5000",
 )
-EXPERIMENT_NAME = "car-price-prediction"
+EXPERIMENT_NAME = os.getenv(
+    "MLFLOW_EXPERIMENT_NAME",
+    "car-price-prediction",
+)
 REGISTERED_MODEL_NAME = "car-price-model"
 N_TRIALS = int(os.getenv("N_TRIALS", "5"))
 SEED = int(os.getenv("RANDOM_SEED", "42"))

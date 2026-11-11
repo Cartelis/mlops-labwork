@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mlflow-training
+  namespace: mlops-labwork
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: trainer
+          image: mlops-labwork-train:82761b4
+          imagePullPolicy: Never
+          command: ["python", "src/hpo.py"]
+          envFrom:
+            - configMapRef:
+                name: mlops-labwork-config
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
