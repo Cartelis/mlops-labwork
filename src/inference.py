@@ -6,7 +6,6 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-
 MODEL_URI = "models:/car-price-model@champion"
 MLFLOW_TRACKING_URI = os.getenv(
     "MLFLOW_TRACKING_URI",

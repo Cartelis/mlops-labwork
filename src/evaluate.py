@@ -1,6 +1,7 @@
 """Evaluate models/model.pkl on the test split -> metrics.json"""
 import json
 from pathlib import Path
+
 import joblib
 import mlflow
 import pandas as pd
@@ -28,7 +29,7 @@ def main() -> None:
             client = mlflow.MlflowClient()
             for key, value in metrics.items():
                 client.log_metric(run_id_file.read_text().strip(), f"eval/{key}", value)
-        except Exception as exc:
+        except Exception as exc:    # noqa: BLE001
             print(f"warning: eval metrics not attached to the training run ({exc})")
 
 if __name__ == "__main__":

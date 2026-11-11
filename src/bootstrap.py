@@ -1,5 +1,6 @@
 """Generate sample car data and train a baseline regression model for local/Docker testing."""
 import os
+
 import joblib
 import numpy as np
 import pandas as pd

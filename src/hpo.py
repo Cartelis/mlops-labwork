@@ -1,17 +1,16 @@
 
 import os
-import yaml
-import joblib
-import optuna
+import subprocess
+from pathlib import Path
+
 import mlflow
 import mlflow.sklearn
+import optuna
 import pandas as pd
-import subprocess
-
-from pathlib import Path
+import yaml
+from mlflow.tracking import MlflowClient
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, r2_score
-from mlflow.tracking import MlflowClient
 
 ROOT = Path(__file__).resolve().parents[1]
 TRACKING_URI = os.getenv(
@@ -46,7 +45,7 @@ def git_commit() -> str:
             cwd=ROOT,
             text=True,
         ).strip()
-    except Exception:
+    except Exception:   # noqa: BLE001
         return "unknown"
 
 def main():
