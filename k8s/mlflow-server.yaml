@@ -19,10 +19,16 @@ spec:
         - name: mlflow
           image: ghcr.io/mlflow/mlflow:v3.17.2-full
           command: ["mlflow", "server"]
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mlflow-db-secret
+                  key: password
           args:
             - "--backend-store-uri"
             # - "sqlite:////mlflow-artifacts/mlflow.db"
-            - "postgresql://mlflowuser:mlflowpassword@mlflow-postgres:5432/mlflowdb"
+            - "postgresql://mlflowuser:$(POSTGRES_PASSWORD)@mlflow-postgres:5432/mlflowdb"
             # - "--default-artifact-root"
             - "--artifacts-destination"
             - "/mlflow-artifacts"

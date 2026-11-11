@@ -22,7 +22,10 @@ spec:
             - name: POSTGRES_USER
               value: mlflowuser
             - name: POSTGRES_PASSWORD
-              value: mlflowpassword
+              valueFrom:
+                secretKeyRef:
+                  name: mlflow-db-secret
+                  key: password
           ports:
             - containerPort: 5432
           resources:
