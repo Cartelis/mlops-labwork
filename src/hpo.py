@@ -20,8 +20,9 @@ TRACKING_URI = os.getenv(
 )
 EXPERIMENT_NAME = "car-price-prediction"
 REGISTERED_MODEL_NAME = "car-price-model"
-N_TRIALS = 5
-SEED = 42
+N_TRIALS = int(os.getenv("N_TRIALS", "5"))
+SEED = int(os.getenv("RANDOM_SEED", "42"))
+
 
 mlflow.set_tracking_uri(TRACKING_URI)
 mlflow.set_experiment(EXPERIMENT_NAME)
@@ -32,6 +33,10 @@ def get_dvc_raw_md5():
     return metadata["outs"][0]["md5"]
 
 def git_commit() -> str:
+    env_commit = os.getenv("GIT_COMMIT")
+    if env_commit:
+        return env_commit
+
     try:
         return subprocess.check_output(
             ["git", "rev-parse", "--short=8", "HEAD"],

@@ -1,0 +1,21 @@
+﻿FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+
+COPY requirements-u2.txt .
+RUN pip install --no-cache-dir -r requirements-u2.txt
+
+COPY src/hpo.py ./src/hpo.py
+COPY data/processed/train.csv ./data/processed/train.csv
+COPY data/processed/test.csv ./data/processed/test.csv
+COPY data/raw/cars.csv.dvc ./data/raw/cars.csv.dvc
+
+RUN useradd --create-home --uid 1000 mluser \
+    && chown -R mluser:mluser /app
+
+USER mluser
+
+CMD ["python", "src/hpo.py"]
