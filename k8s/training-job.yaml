@@ -10,7 +10,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: trainer
-          image: mlops-labwork-train:9ee1da93
+          image: mlops-labwork-train:54a14ab7
           imagePullPolicy: Never
           command: ["python", "src/hpo.py"]
           envFrom:
