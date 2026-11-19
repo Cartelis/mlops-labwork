@@ -1,18 +1,22 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: mlflow-training
+  name: mlflow-training-__SHORT_SHA__
   namespace: mlops-labwork
 spec:
-  backoffLimit: 1
+  backoffLimit: 0
   template:
     spec:
       restartPolicy: Never
       containers:
         - name: trainer
-          image: mlops-labwork-train:54a14ab7
+          image: mlops-labwork-train:__SHORT_SHA__
+          # mlops-labwork-train:54a14ab7
           imagePullPolicy: Never
           command: ["python", "src/hpo.py"]
+          env:
+            - name: GIT_COMMIT
+              value: "__GIT_SHA__"
           envFrom:
             - configMapRef:
                 name: mlops-labwork-config

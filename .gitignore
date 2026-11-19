@@ -28,3 +28,7 @@ outputs/
 
 .env
 *.log
+
+
+# Unique file to this project for testing purposes
+artifacts-check.py

@@ -1,0 +1,307 @@
+﻿name: CD
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  deploy:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: [self-hosted, Windows, X64]
+
+    steps:
+      - name: Checkout CI commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set commit variables
+        shell: pwsh
+        run: |
+          $sha = "${{ github.event.workflow_run.head_sha }}"
+          $shortSha = $sha.Substring(0, 8)
+
+          "GIT_SHA=$sha" >> $env:GITHUB_ENV
+          "SHORT_SHA=$shortSha" >> $env:GITHUB_ENV
+
+      - name: Verify tools
+        shell: pwsh
+        run: |
+          docker version
+          kubectl get nodes
+          minikube status
+          dvc --version
+
+      - name: Pull data from DVC
+        shell: pwsh
+        env:
+          DVC_STORE: "C:\\Users\\juran\\OneDrive\\Stalinis kompiuteris\\stud\\MLOps\\labwork\\.dvc_storage"
+        run: |
+          if (-not $env:DVC_STORE) {
+            throw "DVC_STORE is not configured"
+          }
+
+          dvc remote modify --local localremote url "$env:DVC_STORE"
+          dvc pull data/raw/cars.csv
+
+      - name: Prepare training data
+        shell: pwsh
+        run: |
+          python src/prepare_data.py
+
+          if (-not (Test-Path "data/processed/train.csv")) {
+            throw "train.csv was not created"
+          }
+
+          if (-not (Test-Path "data/processed/test.csv")) {
+            throw "test.csv was not created"
+          }
+
+      - name: Build training image
+        shell: pwsh
+        run: |
+          docker build `
+            --build-arg GIT_COMMIT=$env:GIT_SHA `
+            -f docker/Dockerfile.train `
+            -t mlops-labwork-train:$env:SHORT_SHA .
+
+      - name: Load training image into Minikube
+        shell: pwsh
+        run: |
+          minikube image load mlops-labwork-train:$env:SHORT_SHA
+
+      - name: Create and apply training Job
+        shell: pwsh
+        run: |
+          $manifest = Get-Content "k8s/training-job.yaml" -Raw
+
+          $manifest = $manifest.Replace(
+            "__SHORT_SHA__",
+            $env:SHORT_SHA
+          )
+
+          $manifest = $manifest.Replace(
+            "__GIT_SHA__",
+            $env:GIT_SHA
+          )
+
+          $jobFile = Join-Path $env:RUNNER_TEMP "training-job.yaml"
+
+          Set-Content -Path $jobFile -Value $manifest -Encoding utf8
+
+          kubectl apply -f $jobFile
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to create training Job"
+          }
+
+      - name: Wait for training Job
+        shell: pwsh
+        run: |
+          $jobName = "mlflow-training-$env:SHORT_SHA"
+          $deadline = (Get-Date).AddMinutes(60)
+          $podName = ""
+
+          do {
+            $podName = kubectl get pods `
+              -n mlops-labwork `
+              -l "job-name=$jobName" `
+              -o jsonpath="{.items[0].metadata.name}"
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to find training Pod"
+            }
+
+            if ($podName) {
+              $phase = kubectl get pod $podName `
+                -n mlops-labwork `
+                -o jsonpath="{.status.phase}"
+
+              if ($phase -in @("Succeeded", "Failed")) {
+                break
+              }
+            }
+
+            if ((Get-Date) -gt $deadline) {
+              throw "Training Job timed out after 60 minutes"
+            }
+
+            Start-Sleep -Seconds 5
+          } while ($true)
+
+          "TRAINING_POD=$podName" >> $env:GITHUB_ENV
+
+          Write-Host "Training Pod: $podName"
+          Write-Host "Pod phase: $phase"
+
+      - name: Extract training metrics
+        shell: pwsh
+        run: |
+          $logs = kubectl logs $env:TRAINING_POD -n mlops-labwork
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to read training Pod logs"
+          }
+
+          $metricLine = $logs |
+            Where-Object { $_ -like "METRICS_JSON=*" } |
+            Select-Object -Last 1
+
+          if (-not $metricLine) {
+            Write-Host $logs
+            throw "METRICS_JSON was not found in Pod logs"
+          }
+
+          $metricsJson = $metricLine.Substring("METRICS_JSON=".Length)
+
+          [System.IO.File]::WriteAllText(
+            "metrics.json",
+            $metricsJson,
+            [System.Text.UTF8Encoding]::new($false)
+          )
+
+          Write-Host "Extracted metrics:"
+          Get-Content "metrics.json"
+
+      - name: Check model quality gate
+        shell: pwsh
+        run: |
+          $maxMae = kubectl get configmap mlops-labwork-config `
+            -n mlops-labwork `
+            -o jsonpath="{.data.MAX_MAE}"
+
+          $minR2 = kubectl get configmap mlops-labwork-config `
+            -n mlops-labwork `
+            -o jsonpath="{.data.MIN_R2}"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to read quality thresholds from ConfigMap"
+          }
+
+          if (-not $maxMae -or -not $minR2) {
+            throw "MAX_MAE or MIN_R2 is missing from ConfigMap"
+          }
+
+          python scripts/check_model_gate.py `
+            --metrics metrics.json `
+            --max-mae $maxMae `
+            --min-r2 $minR2
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Model quality gate failed"
+          }
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote API image to release tag
+        shell: pwsh
+        run: |
+          $image = "ghcr.io/cartelis/mlops-labwork-api"
+
+          docker pull "${image}:sha-$env:GIT_SHA"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to pull CI API image"
+          }
+
+          docker tag `
+            "${image}:sha-$env:GIT_SHA" `
+            "${image}:release-$env:SHORT_SHA"
+
+          docker push "${image}:release-$env:SHORT_SHA"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to push release API image"
+          }
+
+      - name: Load release API image into Minikube
+        shell: pwsh
+        run: |
+          $image = "ghcr.io/cartelis/mlops-labwork-api:release-$env:SHORT_SHA"
+
+          docker pull $image
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to pull release API image"
+          }
+
+          minikube image load $image
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to load API image into Minikube"
+          }
+
+      - name: Deploy API to Kubernetes
+        shell: pwsh
+        run: |
+          $manifest = Get-Content "k8s/inference.yaml" -Raw
+
+          $manifest = $manifest.Replace(
+            "__SHORT_SHA__",
+            $env:SHORT_SHA
+          )
+
+          $manifestFile = Join-Path $env:RUNNER_TEMP "inference.yaml"
+
+          Set-Content -Path $manifestFile -Value $manifest -Encoding utf8
+
+          kubectl apply -f $manifestFile
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to apply API manifest"
+          }
+
+          kubectl rollout status deployment/car-price-api `
+            -n mlops-labwork `
+            --timeout=180s
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Deployment failed. Starting rollback..."
+
+            kubectl rollout undo deployment/car-price-api `
+              -n mlops-labwork
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Deployment failed and rollback could not be started"
+            }
+
+            kubectl rollout status deployment/car-price-api `
+              -n mlops-labwork `
+              --timeout=180s
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Rollback rollout also failed"
+            }
+
+            throw "Deployment failed. Previous version was restored."
+          }
+
+      - name: Verify API deployment
+        shell: pwsh
+        run: |
+          kubectl get deployment car-price-api -n mlops-labwork
+          kubectl get pods -n mlops-labwork -l app=car-price-api
+          kubectl get service car-price-api -n mlops-labwork
+
+          $ready = kubectl get deployment car-price-api `
+            -n mlops-labwork `
+            -o jsonpath="{.status.readyReplicas}"
+
+          if ($LASTEXITCODE -ne 0 -or $ready -ne "1") {
+            throw "API deployment is not ready"
+          }
+
+          Write-Host "API deployment is healthy."

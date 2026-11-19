@@ -5,6 +5,9 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+ARG GIT_COMMIT=unknown
+ENV GIT_COMMIT=${GIT_COMMIT}
+
 COPY requirements-u2.txt .
 RUN pip install --no-cache-dir -r requirements-u2.txt
 

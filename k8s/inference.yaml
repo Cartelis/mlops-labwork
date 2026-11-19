@@ -7,7 +7,7 @@ metadata:
 spec:
   replicas: 1
   strategy:
-    type: Recreate
+    type: RollingUpdate
   selector:
     matchLabels:
       app: car-price-api
@@ -18,7 +18,8 @@ spec:
     spec:
       containers:
         - name: car-price-api
-          image: mlops-labwork-api:54a14ab7-v2
+          image: ghcr.io/cartelis/mlops-labwork-api:release-__SHORT_SHA__
+          # mlops-labwork-api:54a14ab7-v2
           imagePullPolicy: Never
           ports:
             - containerPort: 8000

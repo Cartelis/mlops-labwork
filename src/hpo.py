@@ -1,4 +1,4 @@
-
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -24,6 +24,8 @@ EXPERIMENT_NAME = os.getenv(
 REGISTERED_MODEL_NAME = "car-price-model"
 N_TRIALS = int(os.getenv("N_TRIALS", "5"))
 SEED = int(os.getenv("RANDOM_SEED", "42"))
+MAX_MAE = float(os.getenv("MAX_MAE", "2000"))
+MIN_R2 = float(os.getenv("MIN_R2", "0.90"))
 
 
 mlflow.set_tracking_uri(TRACKING_URI)
@@ -47,6 +49,31 @@ def git_commit() -> str:
         ).strip()
     except Exception:   # noqa: BLE001
         return "unknown"
+
+def check_model_quality(mae: float, r2: float) -> None:
+    print(f"Quality gate: MAE <= {MAX_MAE}, R2 >= {MIN_R2}")
+
+    if mae > MAX_MAE or r2 < MIN_R2:
+        raise RuntimeError(
+            f"Model quality gate failed: MAE={mae:.2f}, R2={r2:.4f}"
+        )
+
+    print("Model quality gate passed.")
+
+def save_metrics(mae: float, r2: float) -> None:
+    metrics = {
+        "mae": float(mae),
+        "r2": float(r2),
+    }
+
+    metrics_path = ROOT / "metrics.json"
+    metrics_path.write_text(
+        json.dumps(metrics, indent=2),
+        encoding="utf-8",
+    )
+
+    print(f"Metrics saved to {metrics_path}")
+    print(f"METRICS_JSON={json.dumps(metrics)}")
 
 def main():
     train = pd.read_csv(ROOT / "data/processed/train.csv")
@@ -119,6 +146,9 @@ def main():
         mlflow.log_metric("best_mae", mae)
         mlflow.log_metric("best_r2", r2)
         mlflow.log_param("best_alpha", best_alpha)
+
+        save_metrics(mae, r2)
+        check_model_quality(mae, r2)
 
         mlflow.sklearn.log_model(
             best_model,
